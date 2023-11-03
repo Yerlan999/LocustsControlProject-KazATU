@@ -8,7 +8,7 @@
     <div class="border border-success" id="map" style="width: 100%; height: 500px;"></div>
     <div id="chart-container"></div>
 
-<!--     <div class="form-check">
+    <div class="form-check">
       <input class="form-check-input" type="radio" name="flexRadioDefault" id="flexRadioDefault1">
       <label class="form-check-label" for="flexRadioDefault1">
         Области
@@ -19,7 +19,7 @@
       <label class="form-check-label" for="flexRadioDefault2">
         Районы
       </label>
-    </div> -->
+    </div>
 
     <script>
 
@@ -173,7 +173,7 @@
 
         info.update = function (props) {
             this._div.innerHTML = '<h4>Процент зараженности полей</h4>' +  (props ?
-                '<b>' + props.ADM2_EN + '</b><br />' + props.density + ' %'
+                '<b>' + props.ADM2_EN + '</b><br />' + props.density + ' %. ' + props.GRIDCODE + ''
                 : 'Направьте курсор на область');
         };
 
@@ -200,7 +200,37 @@
       var radio2 = document.getElementById("flexRadioDefault2");
 
       radio1.addEventListener("click", function() {
-        console.log("Radio 1 clicked");
+            $.ajax({
+                type: "GET",
+                url: "/ajax/",
+                data: {
+                    'test': 777,
+                },
+                success: function(data) {
+                    var geoJSONData = JSON.parse(data);
+
+                    console.log(geoJSONData);
+
+                    if (geojson) {
+                        map.removeLayer(geojson);
+                    }
+
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 6,
+                    }).addTo(map);
+
+                    // Add the GeoJSON data to the map
+                    geojson = L.geoJSON(geoJSONData, {
+                        style: style,
+                        onEachFeature: onEachFeature
+                    }).addTo(map);
+
+
+                },
+                error: function(error) {
+                    console.error('Error:', error);
+                }
+            });
       });
 
       radio2.addEventListener("click", function() {
