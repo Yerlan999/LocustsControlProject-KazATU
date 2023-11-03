@@ -195,33 +195,47 @@ def get_forecast_df(shape_lat, shape_lon):
     return forecast_df
 
 
+def read_shapes_files(layer):
+
+    regions_shapes = "kaz_adm_unhcr_2023_shp//kaz_admbnda_adm1_unhcr_2023.shp"
+    districts_shapes = "kaz_adm_unhcr_2023_shp//kaz_admbnda_adm2_unhcr_2023.shp"
+
+    os.chdir("gismodel")
+    if layer == "regions":
+        gdf = gpd.read_file(regions_shapes)
+    else:
+        gdf = gpd.read_file(districts_shapes)
+    os.chdir("..")
+
+    gdf = add_dummy_column(gdf, "density", 30, 40, 0, 100)
+    gdf = convert_coordinates(gdf)
+
+    return gdf
+
+
+
 def ajax_request(request):
+
     if request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest' and request.method == 'GET':
 
-        if 'test' in request.GET:
-            # query_params = request.GET
-            # test = query_params.get('test', None)
-            os.chdir("gismodel")
-            regions_shapes = "kaz_adm_unhcr_2023_shp//kaz_admbnda_adm1_unhcr_2023.shp"
+        if 'layer' in request.GET:
 
-            gdf = gpd.read_file(regions_shapes)
+            query_params = request.GET
+            layer = query_params.get('layer', None)
 
-            gdf = add_dummy_column(gdf, "density", 30, 40, 0, 100)
-            gdf = convert_coordinates(gdf)
-
+            gdf = read_shapes_files(layer)
             geojson_data = gdf.to_json(default=mapping)
 
-            os.chdir("..")
             return JsonResponse(geojson_data, safe=False, content_type='application/json')
+        else:
+            query_params = request.GET
 
-        query_params = request.GET
+            adm1_name = query_params.get('adm1_name', None)
+            adm2_name = query_params.get('adm2_name', None)
+            shape_lat = query_params.get('shape_lat', None)
+            shape_lon = query_params.get('shape_lon', None)
 
-        adm1_name = query_params.get('adm1_name', None)
-        adm2_name = query_params.get('adm2_name', None)
-        shape_lat = query_params.get('shape_lat', None)
-        shape_lon = query_params.get('shape_lon', None)
+            forecast_df = get_forecast_df(shape_lat, shape_lon)
 
-        forecast_df = get_forecast_df(shape_lat, shape_lon)
-
-        json_data = forecast_df.to_json(orient='records')
-        return JsonResponse(json_data, safe=False)
+            json_data = forecast_df.to_json(orient='records')
+            return JsonResponse(json_data, safe=False)
