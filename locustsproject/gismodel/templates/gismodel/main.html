@@ -3,9 +3,24 @@
 {% block title %} Тестовый Проект {% endblock %}
 
 {% block content %}
-  <h1>Карта Казахстана</h1>
+    <h1 class="text-center mb-3">Распространение саранчовых на карте Казахстана</h1>
 
     <div class="border border-success" id="map" style="width: 100%; height: 500px;"></div>
+    <div id="chart-container"></div>
+
+<!--     <div class="form-check">
+      <input class="form-check-input" type="radio" name="flexRadioDefault" id="flexRadioDefault1">
+      <label class="form-check-label" for="flexRadioDefault1">
+        Области
+      </label>
+    </div>
+    <div class="form-check">
+      <input class="form-check-input" type="radio" name="flexRadioDefault" id="flexRadioDefault2" checked>
+      <label class="form-check-label" for="flexRadioDefault2">
+        Районы
+      </label>
+    </div> -->
+
     <script>
 
         var var0 = parseFloat("{{ center_of_map.0 }}");
@@ -15,21 +30,14 @@
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-
         var geojson_data = {{ geojson_data|safe }};
 
-
-        // L.geoJSON(geojson_data).addTo(map);
-
         function getColor(d) {
-            return d > 1000 ? '#f7fcfd' :
-                   d > 500  ? '#e5f5f9' :
-                   d > 200  ? '#ccece6' :
-                   d > 100  ? '#99d8c9' :
-                   d > 50   ? '#66c2a4' :
-                   d > 20   ? '#41ae76' :
-                   d > 10   ? '#238b45' :
-                              '#005824';
+            return d > 100  ? '#bd0026' :
+                   d > 50   ? '#f03b20' :
+                   d > 20   ? '#fd8d3c' :
+                   d > 10   ? '#fecc5c' :
+                              '#ffffb2';
         }
 
         function style(feature) {
@@ -42,7 +50,6 @@
                 fillOpacity: 0.7
             };
         }
-
 
         function highlightFeature(e) {
             var layer = e.target;
@@ -64,9 +71,85 @@
         }
 
         function zoomToFeature(e) {
+            var propertires_of_shape = e.sourceTarget.feature.properties;
+
+            var adm1_name = propertires_of_shape.ADM1_EN;
+            var adm2_name = propertires_of_shape.ADM2_EN;
+            var shape_lat = propertires_of_shape.centroid.coordinates[0];
+            var shape_lon = propertires_of_shape.centroid.coordinates[1];
+
+            $.ajax({
+                type: "GET",
+                url: "/ajax/",
+                data: {
+                    'adm1_name': adm1_name,
+                    'adm2_name': adm2_name,
+                    'shape_lat': shape_lat,
+                    'shape_lon': shape_lon,
+                },
+                success: function(data) {
+                    // Parse the JSON response
+                    var jsonData = JSON.parse(data);
+
+                    // Extract data from the DataFrame
+                    var xData = jsonData.map(function (row) {
+                        return row.time; // Assuming you have an 'x' column for x-axis labels
+                    });
+
+                    var shortwaveRadiationData = jsonData.map(function (row) {
+                        return row.shortwave_radiation_sum;
+                    });
+                    var maxTemperatureData = jsonData.map(function (row) {
+                        return row.temperature_2m_max;
+                    });
+                    var minTemperatureData = jsonData.map(function (row) {
+                        return row.temperature_2m_min;
+                    });
+                    var precipitationData = jsonData.map(function (row) {
+                        return row.precipitation_sum;
+                    });
+
+                    // Create a line chart using Plotly.js
+                    var data = [
+                        {
+                            x: xData,
+                            y: shortwaveRadiationData,
+                            mode: 'lines',
+                            name: 'Радиация'
+                        },
+                        {
+                            x: xData,
+                            y: maxTemperatureData,
+                            mode: 'lines',
+                            name: 'Термература макс'
+                        },
+                        {
+                            x: xData,
+                            y: minTemperatureData,
+                            mode: 'lines',
+                            name: 'Термература мин'
+                        },
+                        {
+                            x: xData,
+                            y: precipitationData,
+                            mode: 'lines',
+                            name: 'Осадки сумма'
+                        }
+                    ];
+
+                    var layout = {
+                        title: `${adm1_name} || ${adm2_name}`
+                    };
+
+                    Plotly.newPlot('chart-container', data, layout);
+                },
+                error: function(error) {
+                    console.error('Error:', error);
+                }
+            });
+
             map.fitBounds(e.target.getBounds());
         }
-
 
         function onEachFeature(feature, layer) {
             layer.on({
@@ -81,19 +164,17 @@
             onEachFeature: onEachFeature
         }).addTo(map);
 
-
-
         var info = L.control();
         info.onAdd = function (map) {
-            this._div = L.DomUtil.create('div', 'info'); // create a div with a class "info"
+            this._div = L.DomUtil.create('div', 'info');
             this.update();
             return this._div;
         };
-        // method that we will use to update the control based on feature properties passed
+
         info.update = function (props) {
-            this._div.innerHTML = '<h4>Какие-то значения</h4>' +  (props ?
-                '<b>' + props.ADM1_EN + '</b><br />' + props.density + ' %'
-                : 'Hover over a state');
+            this._div.innerHTML = '<h4>Процент зараженности полей</h4>' +  (props ?
+                '<b>' + props.ADM2_EN + '</b><br />' + props.density + ' %'
+                : 'Направьте курсор на область');
         };
 
         info.addTo(map);
@@ -101,9 +182,9 @@
         var legend = L.control({position: 'bottomright'});
         legend.onAdd = function (map) {
             var div = L.DomUtil.create('div', 'info legend'),
-                grades = [0, 10, 20, 50, 100, 200, 500, 1000],
+                grades = [0, 10, 20, 50, 100],
                 labels = [];
-            // loop through our density intervals and generate a label with a colored square for each interval
+
             for (var i = 0; i < grades.length; i++) {
                 div.innerHTML +=
                     '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
@@ -113,6 +194,18 @@
         };
 
         legend.addTo(map);
+
+
+      var radio1 = document.getElementById("flexRadioDefault1");
+      var radio2 = document.getElementById("flexRadioDefault2");
+
+      radio1.addEventListener("click", function() {
+        console.log("Radio 1 clicked");
+      });
+
+      radio2.addEventListener("click", function() {
+        console.log("Radio 2 clicked");
+      });
 
 
     </script>
