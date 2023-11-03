@@ -125,28 +125,17 @@ def add_dummy_column(gdf, column_name="density", mean=30, deviation=40, start=0,
 
 def index(request):
 
+    country_shape = "geoBoundaries-KAZ-ADM0-all\\geoBoundaries-KAZ-ADM0.geojson"
+    regions_shapes = "kaz_adm_unhcr_2023_shp\\kaz_admbnda_adm2_unhcr_2023.shp"
+
     os.chdir("gismodel")
 
-    country_shape = "geoBoundaries-KAZ-ADM0-all//geoBoundaries-KAZ-ADM0.geojson"
-    regions_shapes = "kaz_adm_unhcr_2023_shp//kaz_admbnda_adm2_unhcr_2023.shp"
-
-    climate_zones_shapes = 'c1976_2000_0//c1976_2000.shp'
-
-    climate_zones_gdf = gpd.read_file(climate_zones_shapes)
     gdf = gpd.read_file(regions_shapes)
-
-    gdf = add_dummy_column(gdf, "density", 30, 40, 0, 100)
-
-    # kaz_climate_zones = gpd.sjoin(gdf, climate_zones_gdf, how='inner', op='intersects')
-    # kaz_climate_zones = kaz_climate_zones.drop_duplicates(subset=['ADM2_PCODE'], keep='first')
-
     main_gdf = gpd.read_file(country_shape)
 
+    gdf = add_dummy_column(gdf, "density", 30, 40, 0, 100)
     latitude, lonitude = main_gdf.geometry.centroid[0].xy[0][0], main_gdf.geometry.centroid[0].xy[1][0]
-
     gdf = convert_coordinates(gdf)
-
-    # gdf = gdf.merge(kaz_climate_zones[["ADM2_EN", "GRIDCODE"]], on='ADM2_EN')
 
     geojson_data = gdf.to_json(default=mapping)
 
@@ -168,7 +157,6 @@ def reproject_geometry(geom, transformer):
         return MultiPolygon(reprojected_parts)
     elif isinstance(geom, Point):
         x, y = transformer.transform(coords[0][0], coords[0][1])
-        print(x, y)
         return Point(x, y)
     else:
         raise ValueError("Unsupported geometry type")
@@ -197,18 +185,26 @@ def get_forecast_df(shape_lat, shape_lon):
 
 def read_shapes_files(layer):
 
-    regions_shapes = "kaz_adm_unhcr_2023_shp//kaz_admbnda_adm1_unhcr_2023.shp"
-    districts_shapes = "kaz_adm_unhcr_2023_shp//kaz_admbnda_adm2_unhcr_2023.shp"
+    regions_shapes = "kaz_adm_unhcr_2023_shp\\kaz_admbnda_adm1_unhcr_2023.shp"
+    districts_shapes = "kaz_adm_unhcr_2023_shp\\kaz_admbnda_adm2_unhcr_2023.shp"
+    climatic_zones_shapes = "c1976_2000_0\\c1976_2000.shp"
 
     os.chdir("gismodel")
     if layer == "regions":
         gdf = gpd.read_file(regions_shapes)
+    elif layer == "districts":
+        gdf = gpd.read_file(districts_shapes)
     else:
         gdf = gpd.read_file(districts_shapes)
+        gdf = convert_coordinates(gdf)
+        world_climate_zones_gdf = gpd.read_file(climatic_zones_shapes)
+        intersections = gpd.sjoin(gdf, world_climate_zones_gdf, how='inner', op='intersects')
+        gdf = intersections.drop_duplicates(subset=['ADM2_PCODE'], keep='first')
     os.chdir("..")
 
+    if not layer == "zones":
+        gdf = convert_coordinates(gdf)
     gdf = add_dummy_column(gdf, "density", 30, 40, 0, 100)
-    gdf = convert_coordinates(gdf)
 
     return gdf
 
@@ -224,6 +220,7 @@ def ajax_request(request):
             layer = query_params.get('layer', None)
 
             gdf = read_shapes_files(layer)
+
             geojson_data = gdf.to_json(default=mapping)
 
             return JsonResponse(geojson_data, safe=False, content_type='application/json')
