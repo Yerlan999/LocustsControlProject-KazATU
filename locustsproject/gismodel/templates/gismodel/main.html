@@ -7,19 +7,19 @@
 
     <div class="border border-success" id="map" style="width: 100%; height: 500px;"></div>
 
-    <div class="form-check form-check-inline">
+    <div class="form-check form-check-inline mt-3">
       <input class="form-check-input" type="radio" name="flexRadioDefault" id="flexRadioDefault1">
       <label class="form-check-label" for="flexRadioDefault1">
         Области
       </label>
     </div>
-    <div class="form-check form-check-inline">
+    <div class="form-check form-check-inline mt-3">
       <input class="form-check-input" type="radio" name="flexRadioDefault" id="flexRadioDefault2" checked>
       <label class="form-check-label" for="flexRadioDefault2">
         Районы
       </label>
     </div>
-    <div class="form-check form-check-inline">
+    <div class="form-check form-check-inline mt-3">
       <input class="form-check-input" type="radio" name="flexRadioDefault" id="flexRadioDefault3">
       <label class="form-check-label" for="flexRadioDefault3">
         Климатические зоны
@@ -27,9 +27,23 @@
     </div>
 
 
+    <div class="container mt-4">
+      <div class="row">
+        <div class="col-md-6">
+          <h4>Прогноз распространения</h4>
+          <input id="date-slider" type="text" data-slider-min="0" data-slider-max="15" data-slider-step="1" data-slider-value="0">
+          <p id="selected-date"></p>
+        </div>
+      </div>
+    </div>
+
+
     <div id="chart-container"></div>
 
+
+
     <script>
+        var currentLayer = "districts";
 
         var var0 = parseFloat("{{ center_of_map.0 }}");
         var var1 = parseFloat("{{ center_of_map.1 }}");
@@ -41,8 +55,7 @@
         var geojson_data = {{ geojson_data|safe }};
 
         function getColor(d) {
-            return d > 100  ? '#bd0026' :
-                   d > 50   ? '#f03b20' :
+            return d > 50   ? '#f03b20' :
                    d > 20   ? '#fd8d3c' :
                    d > 10   ? '#fecc5c' :
                               '#ffffb2';
@@ -185,10 +198,10 @@
                 grades = [0, 10, 20, 50, 100],
                 labels = [];
 
-            for (var i = 0; i < grades.length; i++) {
+            for (var i = 0; i < grades.length-1; i++) {
                 div.innerHTML +=
                     '<i style="background:' + getColor(grades[i] + 1) + '"></i> ' +
-                    grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '+');
+                    grades[i] + (grades[i + 1] ? '&ndash;' + grades[i + 1] + '<br>' : '');
             }
             return div;
         };
@@ -196,11 +209,82 @@
         legend.addTo(map);
 
 
-      var radio1 = document.getElementById("flexRadioDefault1");
-      var radio2 = document.getElementById("flexRadioDefault2");
-      var radio3 = document.getElementById("flexRadioDefault3");
+        var radio1 = document.getElementById("flexRadioDefault1");
+        var radio2 = document.getElementById("flexRadioDefault2");
+        var radio3 = document.getElementById("flexRadioDefault3");
 
-      radio1.addEventListener("click", function() {
+
+        function updateMap(data, map){
+
+            var geoJSONData = JSON.parse(data);
+
+            if (geojson) {
+                map.removeLayer(geojson);
+            }
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 6,
+            }).addTo(map);
+
+            geojson = L.geoJSON(geoJSONData, {
+                style: style,
+                onEachFeature: onEachFeature
+            }).addTo(map);
+
+        }
+
+        function updateZonesMap(data, map){
+
+            var geoJSONData = JSON.parse(data);
+
+            if (geojson) {
+                map.removeLayer(geojson);
+            }
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 6,
+            }).addTo(map);
+
+            var colorMapping = {
+                21: 'red',
+                26: 'blue',
+                42: 'green',
+                41: 'purple',
+                34: 'orange',
+                43: 'cyan',
+                45: 'magenta'
+            };
+
+            geojson = L.geoJSON(geoJSONData, {
+
+                style: function (feature) {
+                    var gridCode = feature.properties.GRIDCODE;
+
+                    if (colorMapping[gridCode]) {
+                        return {
+                            fillColor: colorMapping[gridCode],
+                            weight: 1,
+                            opacity: 1,
+                            color: 'white',
+                            fillOpacity: 0.7
+                        };
+                    } else {
+
+                        return {
+                            fillColor: 'gray',
+                            weight: 1,
+                            opacity: 1,
+                            color: 'white',
+                            fillOpacity: 0.7
+                        };
+                    }
+                },
+                onEachFeature: onEachFeature,
+
+            }).addTo(map);
+        }
+
+        radio1.addEventListener("click", function() {
             $.ajax({
                 type: "GET",
                 url: "/ajax/",
@@ -208,22 +292,8 @@
                     'layer': "regions",
                 },
                 success: function(data) {
-                    var geoJSONData = JSON.parse(data);
-
-                    if (geojson) {
-                        map.removeLayer(geojson);
-                    }
-
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        maxZoom: 6,
-                    }).addTo(map);
-
-                    geojson = L.geoJSON(geoJSONData, {
-                        style: style,
-                        onEachFeature: onEachFeature
-                    }).addTo(map);
-
-
+                    currentLayer = "regions";
+                    updateMap(data, map);
                 },
                 error: function(error) {
                     console.error('Error:', error);
@@ -239,22 +309,8 @@
                     'layer': "districts",
                 },
                 success: function(data) {
-                    var geoJSONData = JSON.parse(data);
-
-                    if (geojson) {
-                        map.removeLayer(geojson);
-                    }
-
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        maxZoom: 6,
-                    }).addTo(map);
-
-                    geojson = L.geoJSON(geoJSONData, {
-                        style: style,
-                        onEachFeature: onEachFeature
-                    }).addTo(map);
-
-
+                    currentLayer = "districts";
+                    updateMap(data, map);
                 },
                 error: function(error) {
                     console.error('Error:', error);
@@ -271,61 +327,65 @@
                     'layer': "zones",
                 },
                 success: function(data) {
-                    var geoJSONData = JSON.parse(data);
-
-                    console.log(geoJSONData);
-
-                    if (geojson) {
-                        map.removeLayer(geojson);
-                    }
-
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        maxZoom: 6,
-                    }).addTo(map);
-
-                    var colorMapping = {
-                        21: 'red',
-                        26: 'blue',
-                        42: 'green',
-                        41: 'purple',
-                        34: 'orange',
-                        43: 'cyan',
-                        45: 'magenta'
-                    };
-
-                    geojson = L.geoJSON(geoJSONData, {
-
-                        style: function (feature) {
-                            var gridCode = feature.properties.GRIDCODE;
-
-                            if (colorMapping[gridCode]) {
-                                return {
-                                    fillColor: colorMapping[gridCode],
-                                    weight: 1,
-                                    opacity: 1,
-                                    color: 'white',
-                                    fillOpacity: 0.7
-                                };
-                            } else {
-
-                                return {
-                                    fillColor: 'gray',
-                                    weight: 1,
-                                    opacity: 1,
-                                    color: 'white',
-                                    fillOpacity: 0.7
-                                };
-                            }
-                        },
-                        onEachFeature: onEachFeature,
-
-                    }).addTo(map);
+                    currentLayer = "zones";
+                    updateZonesMap(data, map);
                 },
                 error: function(error) {
                     console.error('Error:', error);
                 }
             });
       });
+
+
+      var currentDate = new Date();
+      var formattedDate = currentDate.toISOString().split('T')[0];
+      $('#selected-date').text("На дату: " + formattedDate);
+      var previousDate;
+
+      $(document).ready(function () {
+        var currentDate = new Date();
+        var dateSlider = $('#date-slider');
+
+        dateSlider.slider({
+          formatter: function (value) {
+            var selectedDate = new Date();
+            selectedDate.setDate(currentDate.getDate() + value);
+            var formattedDate = selectedDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
+            return formattedDate;
+          }
+        });
+
+        dateSlider.on('slideStop', function (slideEvt) {
+          var selectedDate = new Date();
+          selectedDate.setDate(currentDate.getDate() + slideEvt.value);
+          var formattedDate = selectedDate.toISOString().split('T')[0];
+
+          if (slideEvt.value > 0 && formattedDate != previousDate){
+              $('#selected-date').text("На дату: " + formattedDate);
+            $.ajax({
+                type: "GET",
+                url: "/ajax/",
+                data: {
+                    'prediction': formattedDate,
+                    'index': slideEvt.value,
+                },
+                success: function(data) {
+                    if (currentLayer == "regions" || currentLayer == "districts"){
+                        updateMap(data, map);
+                    }
+                    else{
+                        updateZonesMap(data, map);
+                    }
+                },
+                error: function(error) {
+                    console.error('Error:', error);
+                }
+            });
+              previousDate = formattedDate;
+          }
+        });
+      });
+
 
     </script>
 {% endblock %}

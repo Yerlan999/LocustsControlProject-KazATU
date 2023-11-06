@@ -57,6 +57,12 @@ history_parameters = [
 
 last_main_description = ""
 
+layer = None
+preloaded_districts_gdf = None
+preloaded_regions_gdf = None
+preloaded_zones_gdf = None
+
+
 def get_weather_mapping():
     global last_main_description
 
@@ -124,17 +130,14 @@ def add_dummy_column(gdf, column_name="density", mean=30, deviation=40, start=0,
 
 
 def index(request):
+    global layer
 
-    country_shape = "geoBoundaries-KAZ-ADM0-all\\geoBoundaries-KAZ-ADM0.geojson"
-    regions_shapes = "kaz_adm_unhcr_2023_shp\\kaz_admbnda_adm2_unhcr_2023.shp"
+    layer = "districts"
 
-    os.chdir("gismodel")
-
-    gdf = gpd.read_file(regions_shapes)
-    main_gdf = gpd.read_file(country_shape)
+    gdf = preloaded_districts_gdf
 
     gdf = add_dummy_column(gdf, "density", 30, 40, 0, 100)
-    latitude, lonitude = main_gdf.geometry.centroid[0].xy[0][0], main_gdf.geometry.centroid[0].xy[1][0]
+    latitude, lonitude = 66.9237, 48.0196
     gdf = convert_coordinates(gdf)
 
     geojson_data = gdf.to_json(default=mapping)
@@ -143,7 +146,7 @@ def index(request):
         "geojson_data": geojson_data,
         "center_of_map": (latitude, lonitude),
     }
-    os.chdir("..")
+
     return render(request, "gismodel/main.html", context)
 
 
@@ -211,6 +214,7 @@ def read_shapes_files(layer):
 
 
 def ajax_request(request):
+    global layer
 
     if request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest' and request.method == 'GET':
 
@@ -218,6 +222,17 @@ def ajax_request(request):
 
             query_params = request.GET
             layer = query_params.get('layer', None)
+
+            gdf = choose_preloaded_layers(layer)
+
+            geojson_data = gdf.to_json(default=mapping)
+
+            return JsonResponse(geojson_data, safe=False, content_type='application/json')
+        elif 'prediction' in request.GET:
+            query_params = request.GET
+
+            prediction = query_params.get('prediction', None)
+            index = query_params.get('index', None)
 
             gdf = read_shapes_files(layer)
 
@@ -236,3 +251,22 @@ def ajax_request(request):
 
             json_data = forecast_df.to_json(orient='records')
             return JsonResponse(json_data, safe=False)
+
+
+def choose_preloaded_layers(layer):
+    if layer == "districts":
+        gdf = preloaded_districts_gdf
+    elif layer == "regions":
+        gdf = preloaded_regions_gdf
+    else:
+        gdf = preloaded_zones_gdf
+    return gdf
+
+def preload_layers():
+    global preloaded_zones_gdf, preloaded_districts_gdf, preloaded_regions_gdf
+
+    preloaded_zones_gdf = read_shapes_files('zones')
+    preloaded_districts_gdf = read_shapes_files('districts')
+    preloaded_regions_gdf = read_shapes_files('regions')
+
+preload_layers()
