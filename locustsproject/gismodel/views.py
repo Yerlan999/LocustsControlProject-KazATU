@@ -234,7 +234,8 @@ def ajax_request(request):
             prediction = query_params.get('prediction', None)
             index = query_params.get('index', None)
 
-            gdf = read_shapes_files(layer)
+            gdf = choose_preloaded_layers(layer)
+            gdf = add_dummy_column(gdf, "density", 30, 40, 0, 100)
 
             geojson_data = gdf.to_json(default=mapping)
 
