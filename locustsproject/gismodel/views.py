@@ -217,10 +217,10 @@ def ajax_request(request):
     global layer
 
     if request.META.get('HTTP_X_REQUESTED_WITH') == 'XMLHttpRequest' and request.method == 'GET':
+        query_params = request.GET
 
-        if 'layer' in request.GET:
+        if 'layer' in query_params:
 
-            query_params = request.GET
             layer = query_params.get('layer', None)
 
             gdf = choose_preloaded_layers(layer)
@@ -228,8 +228,7 @@ def ajax_request(request):
             geojson_data = gdf.to_json(default=mapping)
 
             return JsonResponse(geojson_data, safe=False, content_type='application/json')
-        elif 'prediction' in request.GET:
-            query_params = request.GET
+        elif 'prediction' in query_params:
 
             prediction = query_params.get('prediction', None)
             index = query_params.get('index', None)
@@ -240,8 +239,7 @@ def ajax_request(request):
             geojson_data = gdf.to_json(default=mapping)
 
             return JsonResponse(geojson_data, safe=False, content_type='application/json')
-        else:
-            query_params = request.GET
+        elif ('shape_lat' in query_params) and ('shape_lon' in query_params):
 
             adm1_name = query_params.get('adm1_name', None)
             adm2_name = query_params.get('adm2_name', None)
@@ -252,6 +250,21 @@ def ajax_request(request):
 
             json_data = forecast_df.to_json(orient='records')
             return JsonResponse(json_data, safe=False)
+        else:
+            gdf = choose_preloaded_layers(layer)
+
+            updated_density_list = []
+            if "ADM2_EN" in gdf.columns:
+                for field_name in gdf["ADM2_EN"]:
+                    updated_density_list.append(query_params.get(field_name, None))
+            else:
+                for field_name in gdf["ADM1_EN"]:
+                    updated_density_list.append(query_params.get(field_name, None))
+
+            gdf["density"] = updated_density_list
+            geojson_data = gdf.to_json(default=mapping)
+
+            return JsonResponse(geojson_data, safe=False)
 
 
 def choose_preloaded_layers(layer):

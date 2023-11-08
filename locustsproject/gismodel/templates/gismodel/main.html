@@ -27,7 +27,34 @@
     </div>
 
 
-    <div class="col-12 mt-4"> <!-- Use col-12 to make it span the full width -->
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#staticBackdrop">
+      Ввод данных
+    </button>
+
+
+    <div class="modal fade" id="staticBackdrop" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="staticBackdropLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h1 class="modal-title fs-5" id="staticBackdropLabel">Начальные значения</h1>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <form id="inputForm">
+                <!--  -->
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+            <button type="button" class="btn btn-primary" id="saveButton" data-bs-dismiss="modal">Обновить</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+
+    <div class="col-12 mt-4">
       <h4 class="text-center">Прогноз распространения</h4>
       <input id="date-slider" type="text" data-slider-min="0" data-slider-max="15" data-slider-step="1" data-slider-value="0" style="width: 100%;">
       <p id="selected-date"></p>
@@ -179,6 +206,8 @@
             onEachFeature: onEachFeature
         }).addTo(map);
 
+        fillModal(geojson_data);
+
         var info = L.control();
         info.onAdd = function (map) {
             this._div = L.DomUtil.create('div', 'info');
@@ -294,6 +323,7 @@
                 success: function(data) {
                     currentLayer = "regions";
                     updateMap(data, map);
+                    fillModal(data);
                 },
                 error: function(error) {
                     console.error('Error:', error);
@@ -311,6 +341,7 @@
                 success: function(data) {
                     currentLayer = "districts";
                     updateMap(data, map);
+                    fillModal(data);
                 },
                 error: function(error) {
                     console.error('Error:', error);
@@ -329,6 +360,7 @@
                 success: function(data) {
                     currentLayer = "zones";
                     updateZonesMap(data, map);
+                    fillModal(data);
                 },
                 error: function(error) {
                     console.error('Error:', error);
@@ -391,6 +423,60 @@
 
       });
 
+
+        function fillModal(geojson_data){
+
+            if (typeof geojson_data == 'string'){
+                geojson_data = JSON.parse(geojson_data);
+            };
+
+            const columnNames = Object.keys(geojson_data.features[0].properties);
+            var field_names;
+
+            if (columnNames.includes('ADM2_EN')) {
+                field_names = geojson_data.features.map(feature => feature.properties["ADM2_EN"]);
+            } else {
+                field_names = geojson_data.features.map(feature => feature.properties["ADM1_EN"]);
+            }
+
+            density = geojson_data.features.map(feature => feature.properties["density"]);
+
+            const inputForm = $("#inputForm");
+            inputForm.empty();
+
+            field_names.forEach(function(field_name, index) {
+                const inputField = `<div class="form-group">
+                    <label for="${field_name}">${field_name}</label>
+                    <input type="text" class="form-control" id="${field_name}" name="${field_name}" value="${density[index]}">
+                </div>`;
+                inputForm.append(inputField);
+            });
+        };
+
+
+
+        $("#saveButton").click(function() {
+
+            const formData = $("#inputForm").serialize();
+
+            $.ajax({
+                type: "GET",
+                url: "/ajax/",
+                data: formData,
+                success: function(data) {
+                    if (currentLayer == "regions" || currentLayer == "districts"){
+                        updateMap(data, map);
+                    }
+                    else{
+                        updateZonesMap(data, map);
+                    }
+                    fillModal(data);
+                },
+                error: function(error) {
+                    console.error("Error saving data:", error);
+                }
+            });
+        });
 
     </script>
 {% endblock %}
