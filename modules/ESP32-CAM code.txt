@@ -1,0 +1,60 @@
+#include "esp_camera.h"
+
+// UART configuration
+#define UART_TX_PIN 1  // Change this to the TX pin connected to the other ESP32's RX pin
+#define UART_RX_PIN 3  // Change this to the RX pin connected to the other ESP32's TX pin
+#define BAUD_RATE 115200
+
+void setup() {
+  Serial.begin(115200);
+
+  // Start the camera
+  camera_config_t config;
+  // ... (same camera configuration as before)
+
+  esp_err_t err = esp_camera_init(&config);
+  if (err != ESP_OK) {
+    Serial.printf("Camera init failed with error 0x%x", err);
+    return;
+  }
+
+  // Start UART
+  Serial.begin(BAUD_RATE);
+}
+
+void takeAndSendPhoto() {
+  // Capture a photo
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (!fb) {
+    Serial.println("Camera capture failed");
+    return;
+  }
+
+  // Send the photo size over UART
+  Serial.write((uint8_t*)(&fb->len), sizeof(size_t));
+
+  // Send the photo over UART
+  for (size_t i = 0; i < fb->len; i++) {
+    Serial.write(fb->buf[i]);
+  }
+
+  // Return the frame buffer
+  esp_camera_fb_return(fb);
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    // Wait for the command byte
+    uint8_t command = Serial.read();
+
+    // Check for the specific command (e.g., 0x01)
+    if (command == 0x01) {
+      // Command to take a photo
+      takeAndSendPhoto();
+    }
+  }
+
+  // Your other loop logic can go here
+
+  delay(100);  // Adjust the delay as needed
+}

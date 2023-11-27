@@ -1,0 +1,72 @@
+#include <Arduino.h>
+#include <SoftwareSerial.h>
+#include <HTTPClient.h>
+
+// UART configuration
+#define UART_TX_PIN 1  // Change this to the TX pin connected to the other ESP32's RX pin
+#define UART_RX_PIN 3  // Change this to the RX pin connected to the other ESP32's TX pin
+#define BAUD_RATE 115200
+
+// SIM800 configuration
+SoftwareSerial sim800Serial(10, 11);  // RX, TX
+#define SIM800_POWER_PIN 9
+
+void setup() {
+  Serial.begin(BAUD_RATE);
+  sim800Serial.begin(9600);
+
+  pinMode(SIM800_POWER_PIN, OUTPUT);
+  digitalWrite(SIM800_POWER_PIN, HIGH); // Power on the SIM800 module
+}
+
+void requestAndReceivePhoto() {
+  // Send the command to request a photo
+  Serial.write(0x01);
+
+  // Wait for the photo size
+  size_t photoSize;
+  while (Serial.available() < sizeof(size_t)) {
+    delay(10);
+  }
+  Serial.readBytes((char*)&photoSize, sizeof(size_t));
+
+  // Receive the photo data
+  uint8_t *photoData = (uint8_t*)malloc(photoSize);
+  size_t bytesRead = 0;
+  while (bytesRead < photoSize) {
+    if (Serial.available()) {
+      photoData[bytesRead++] = Serial.read();
+    }
+  }
+
+  // Send the photo data to a web server via POST request
+  HTTPClient http;
+  http.begin(sim800Serial, "http://your-web-server/upload-endpoint");  // Replace with your web server URL
+
+  // Add headers (adjust as needed)
+  http.addHeader("Content-Type", "image/jpeg");
+
+  // Send the photo data in the body of the POST request
+  int httpResponseCode = http.POST(photoData, photoSize);
+
+  // Check the HTTP response code
+  if (httpResponseCode > 0) {
+    Serial.printf("HTTP POST Success, Response code: %d\n", httpResponseCode);
+  } else {
+    Serial.printf("HTTP POST Failed, Error code: %d\n", httpResponseCode);
+  }
+
+  // End the HTTP connection
+  http.end();
+
+  // Free the dynamically allocated memory
+  free(photoData);
+}
+
+void loop() {
+  // Your loop logic can go here
+
+  // For demonstration purposes, let's request and upload a photo every 10 seconds
+  requestAndReceivePhoto();
+  delay(10000);
+}
